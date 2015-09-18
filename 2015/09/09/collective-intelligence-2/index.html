@@ -230,7 +230,23 @@
     </header>
     <div class="entry">
       
-        <h3 id="提供推荐CF">提供推荐CF</h3>
+        <p>本章介绍了两种基础的推荐型算法UserCF和ItemCF，初步了解大数据下，推荐系统的基本实现方案。<br><a id="more"></a></p>
+<h3 id="协作型过滤">协作型过滤</h3><p>协同过滤是利用集体智慧的一个典型方法。要理解什么是协同过滤 (Collaborative Filtering, 简称CF)，首先想一个简单的问题，如果你现在想看个电影，但你不知道具体看哪部，你会怎么做？大部分的人会问问周围的朋友，看看最近有什么好看的电影推荐，而我们一般更倾向于从口味比较类似的朋友那里得到推荐。这就是协同过滤的核心思想。</p>
+<p>协同过滤一般是在海量的用户中发掘出一小部分和你品位比较类似的，在协同过滤中，这些用户成为邻居，然后根据他们喜欢的其他东西组织成一个排序的目录推荐给你。</p>
+<p>要实现协同过滤，需要以下几个步骤：</p>
+<blockquote>
+<ul>
+<li>搜集偏好</li>
+<li>寻找相近用户</li>
+<li>推荐物品  </li>
+</ul>
+</blockquote>
+<h3 id="搜集偏好">搜集偏好</h3><p>首先，我们要寻找一种表达不同人及其偏好的方法。这里我们用python的嵌套字典来实习。</p>
+<p>在本章中所用的数据，是从国外的网站<a href="http://grouplens.org/datasets/" target="_blank" rel="external">grouplens</a>下载的<a href="http://dl.zthero.com/data/20150916/u.data" target="_blank" rel="external">u.data</a>。该数据总共四列，共分为用户ID、电影ID、用户评分、时间。我们只需根据前三列，生成相应的用户偏好字典。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#生成用户偏好字典</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">make_data</span><span class="params">()</span>:</span></span><br><span class="line">    result=&#123;&#125;</span><br><span class="line">    f = open(<span class="string">'data/u.data'</span>, <span class="string">'r'</span>)</span><br><span class="line">    lines = f.readlines()</span><br><span class="line">    <span class="keyword">for</span> line <span class="keyword">in</span> lines:</span><br><span class="line">        <span class="comment">#按行分割数据</span></span><br><span class="line">        (userId , itemId , score,time ) = line.strip().split(<span class="string">"\t"</span>)</span><br><span class="line">        <span class="comment">#字典要提前定义</span></span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">not</span> result.has_key( userId ):</span><br><span class="line">            result[userId]=&#123;&#125;</span><br><span class="line">        <span class="comment">#注意float,不然后续的运算存在类型问题</span></span><br><span class="line">        result[userId][itemId] = float(score)</span><br><span class="line">    <span class="keyword">return</span> result</span><br></pre></td></tr></table></figure>
+<p>另外如果想在字典中显示展现电影名，方便分析，也可以根据<a href="http://dl.zthero.com/data/20150916/u.item" target="_blank" rel="external">u.item</a>中电影数据，预先生成电影的数据集。<br><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#将id替换为电影名 构造数据集</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">loadMovieLens</span><span class="params">(path=<span class="string">'data'</span>)</span>:</span></span><br><span class="line">    <span class="comment"># Get movie titles</span></span><br><span class="line">    movies=&#123;&#125;</span><br><span class="line">    <span class="keyword">for</span> line <span class="keyword">in</span> open(path+<span class="string">'/u.item'</span>):</span><br><span class="line">        (id,title)=line.split(<span class="string">'|'</span>)[<span class="number">0</span>:<span class="number">2</span>]</span><br><span class="line">        movies[id]=title</span><br><span class="line"></span><br><span class="line">    <span class="comment"># Load data</span></span><br><span class="line">    prefs=&#123;&#125;</span><br><span class="line">    <span class="keyword">for</span> line <span class="keyword">in</span> open(path+<span class="string">'/u.data'</span>):</span><br><span class="line">        (user,movieid,rating,ts)=line.split(<span class="string">'\t'</span>)</span><br><span class="line">        prefs.setdefault(user,&#123;&#125;)</span><br><span class="line">        prefs[user][movies[movieid]]=float(rating)</span><br><span class="line">    <span class="keyword">return</span> prefs</span><br></pre></td></tr></table></figure></p>
+<p>根据上面两个函数中的一种，到此我们的用户数据集已经构造好了，由于数据量不是非常大，暂时放在内存中即可。</p>
+<h3 id="寻找相近用户">寻找相近用户</h3>
       
     </div>
     <footer>
@@ -256,6 +272,8 @@
 
 
  <nav id="pagination" >
+    
+    <a href="/2015/09/18/introduction-to-apriori/" class="alignleft prev" >上一页</a>
     
     
     <a href="/2015/09/09/collective-intelligence-1/" class="alignright next" >下一页</a>
@@ -301,6 +319,8 @@ var duoshuoQuery = {short_name:"tirozhang"};
   
     <li><a href="/categories/markdown/">markdown</a><small>2</small></li>
   
+    <li><a href="/categories/数据挖掘/">数据挖掘</a><small>1</small></li>
+  
     <li><a href="/categories/集体智慧编程/">集体智慧编程</a><small>2</small></li>
   
   </ul>
@@ -311,22 +331,26 @@ var duoshuoQuery = {short_name:"tirozhang"};
 <h3 class="title">简介</h3>
 <ul class="entry">
 <li>tirozhang</li>
-<li>就职:腾讯北分</li>
-<li>Theme: <a href="https://github.com/zippera/lightum">Lightum</a>
-<li>QQ 号：234017126</li>
+<li>就职：腾讯北分</li>
+<li>微博：<a href="http://weibo.com/u/2154387932">小青蛙zt</a></li>
 </ul>
 </div>
 
 
 
-  <iframe width="100%" height="550" class="share_self"  frameborder="0" scrolling="no"
-src="http://widget.weibo.com/weiboshow/index.php?language=&width=0&height=550&fansRow=1&ptype=1&speed=0&skin=1&isTitle=0&noborder=1&isWeibo=1&isFans=0&uid=2154387932&verifier=c1366a9e&dpc=1"></iframe>
+  
+<div class="widget tagcloud">
+  <h3 class="title">标签云</h3>
+  <div class="entry">
+    <a href="/tags/Apriori/" style="font-size: 10px;">Apriori</a> <a href="/tags/markdown/" style="font-size: 20px;">markdown</a> <a href="/tags/vim/" style="font-size: 10px;">vim</a> <a href="/tags/供推荐CF/" style="font-size: 10px;">供推荐CF</a> <a href="/tags/数据挖掘/" style="font-size: 10px;">数据挖掘</a> <a href="/tags/集体智慧编程/" style="font-size: 20px;">集体智慧编程</a> <a href="/tags/频繁模式挖掘/" style="font-size: 10px;">频繁模式挖掘</a>
+  </div>
+</div>
 
 </aside>
     <div class="clearfix"></div>
   </div>
   <footer id="footer" class="inner"><section>
-Theme of <a href="https://github.com/zippera/lightum">Lightum</a>, Improved from <a href="https://github.com/hexojs/hexo-theme-light">Light</a>, by <a href="/">tirozhang</a> 
+Theme of <a href="https://github.com/zthero/lightum">Lightum</a>, Improved from <a href="https://github.com/hexojs/hexo-theme-light">Light</a>, by <a href="/">tirozhang</a> 
 </section>
 <div class="clearfix"></div>
 </footer>
